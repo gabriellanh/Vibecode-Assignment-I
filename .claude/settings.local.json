@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "WebFetch(domain:www.squarespace.com)",
+      "WebFetch(domain:www.wix.com)",
+      "Bash(xargs kill:*)",
+      "Bash(kill -9 65441)",
+      "Bash(ls -la /Users/gabriellanh/Desktop/vibecode/*.csv)",
+      "Bash(chmod +x /Users/gabriellanh/Desktop/vibecode/serve.py)",
+      "Bash(xattr -l /Users/gabriellanh/Desktop/vibecode/serve.py)",
+      "Bash(xattr -d com.apple.provenance /Users/gabriellanh/Desktop/vibecode/serve.py)",
+      "Bash(xattr -d com.apple.quarantine /Users/gabriellanh/Desktop/vibecode/serve.py)",
+      "Bash(curl -s http://localhost:8000)",
+      "Bash(pkill -f \"http.server\")",
+      "Bash(node -c /Users/gabriellanh/Desktop/vibecode/script.js)"
+    ]
+  }
+}
