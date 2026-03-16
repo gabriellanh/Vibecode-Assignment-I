@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Legislation Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f4f1eb;
+    --surface: #fffefa;
+    --ink: #1a1a18;
+    --ink2: #5a5a54;
+    --ink3: #9a9a90;
+    --accent: #2d5a3d;
+    --accent-light: #b5cebe;
+    --accent2: #c8502a;
+    --border: rgba(26,26,24,0.12);
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  header {
+    padding: 0.9rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: center; gap: 1rem;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 1rem; font-weight: 500; letter-spacing: -0.01em; }
+  header .pill {
+    font-family: var(--mono); font-size: 0.62rem; color: var(--ink3);
+    background: var(--bg); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 2px;
+  }
+
+  .layout { display: grid; grid-template-columns: 1fr 340px; flex: 1; min-height: 0; }
+
+  /* LEFT PANEL */
+  .left { display: flex; flex-direction: column; overflow: hidden; padding: 1rem 1rem 0.5rem 1.5rem; gap: 0.75rem; }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 5px; flex-shrink: 0; }
+  .year-filters { border-top: 1px solid var(--border); padding-top: 5px; margin-top: 5px; }
+  .filter-btn {
+    font-family: var(--mono); font-size: 0.62rem; padding: 4px 10px; border-radius: 2px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink2);
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .filter-btn.all-btn.active { background: var(--ink); border-color: var(--ink); }
+  .year-btn.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+
+  #map-container { flex: 1; min-height: 0; position: relative; }
+  #map-container svg { width: 100%; height: 100%; }
+
+  .state-path {
+    fill: #ddd9d0;
+    stroke: var(--bg);
+    stroke-width: 1px;
+    cursor: default;
+    transition: fill 0.2s;
+  }
+  .state-path.has-laws { fill: var(--accent-light); cursor: pointer; }
+  .state-path.highlighted { fill: var(--accent); cursor: pointer; }
+  .state-path.has-laws:hover { fill: #8fb8a8; }
+  .state-path.highlighted:hover { fill: #1e4029; }
+
+  .state-label {
+    font-family: var(--mono); font-size: 7px; fill: var(--ink);
+    pointer-events: none; text-anchor: middle; dominant-baseline: middle;
+  }
+  .state-label.on-dark { fill: #fff; }
+
+  /* TOOLTIP */
+  #tooltip {
+    position: absolute; pointer-events: none; opacity: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 6px 10px; font-size: 0.7rem;
+    font-family: var(--mono); color: var(--ink2); transition: opacity 0.1s;
+    white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  /* RIGHT PANEL */
+  .sidebar {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1px; background: var(--border);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stat { background: var(--surface); padding: 0.9rem 1rem; }
+  .stat-label { font-family: var(--mono); font-size: 0.58rem; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .stat-val { font-size: 1.5rem; font-weight: 300; letter-spacing: -0.03em; line-height: 1; }
+  .stat-val.sm { font-size: 0.85rem; font-weight: 400; padding-top: 3px; line-height: 1.3; }
+  .stat-sub { font-family: var(--mono); font-size: 0.58rem; color: var(--ink3); margin-top: 3px; }
+
+  .category-chart {
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    min-height: 130px;
+    padding: 0.8rem 0;
+    background: var(--surface);
+  }
+  .category-chart svg { display: block; width: 100%; }
+  .category-chart text { font-family: var(--mono); font-size: 0.56rem; }
+  .category-chart .bar { fill: var(--accent); transition: fill 0.2s; }
+  .category-chart .bar:hover { fill: var(--accent-light); cursor: pointer; }
+  .category-chart .label-y { fill: var(--ink2); text-anchor: end; }
+  .category-chart .label-x { fill: var(--ink3); }
+
+  .bills-header {
+    padding: 0.65rem 1rem;
+    font-family: var(--mono); font-size: 0.62rem; color: var(--ink3);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .bills-list { flex: 1; overflow-y: auto; }
+  .bills-list::-webkit-scrollbar { width: 4px; }
+  .bills-list::-webkit-scrollbar-track { background: transparent; }
+  .bills-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .bill-card { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  .bill-card:hover { background: var(--bg); }
+  .bill-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 3px; }
+  .bill-state { font-family: var(--mono); font-size: 0.6rem; color: var(--accent2); font-weight: 500; }
+  .bill-num { font-family: var(--mono); font-size: 0.56rem; color: var(--ink3); }
+  .bill-title { font-size: 0.76rem; font-weight: 500; color: var(--ink); line-height: 1.4; margin-bottom: 4px; }
+  .bill-summary { font-size: 0.68rem; color: var(--ink2); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .bill-cat { display: inline-block; font-family: var(--mono); font-size: 0.54rem; padding: 2px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 2px; color: var(--ink3); margin-top: 5px; }
+  .empty { padding: 2rem 1rem; font-family: var(--mono); font-size: 0.7rem; color: var(--ink3); text-align: center; }
+  .loading { padding: 2rem 1rem; font-family: var(--mono); font-size: 0.7rem; color: var(--ink3); text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI Legislation Tracker</h1>
+  <span class="pill">236 laws · 12+ states · ongoing</span>
+</header>
+
+<div class="layout">
+  <div class="left">
+    <div class="filters" id="filters"></div>
+    <div id="map-container">
+      <div id="tooltip"></div>
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="stats-grid" id="stats"></div>
+    <div id="category-chart" class="category-chart"></div>
+    <div class="bills-header" id="bills-header">All laws · 236</div>
+    <div class="bills-list" id="bills-list"><div class="loading">Loading...</div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+const DATA = [
+  {state:"Utah",bill:"SB 249",title:"Artificial Intelligence Policy Act",year:2024,category:"Consumer Protection",summary:"Requires clear disclosure when a person interacts with a generative AI system instead of a human and treats undisclosed AI interactions as deceptive practices under state consumer law."},
+  {state:"Colorado",bill:"SB 24-205",title:"Colorado Artificial Intelligence Act",year:2024,category:"General AI Governance",summary:"Establishes comprehensive obligations for developers and deployers of high-risk AI systems, including risk management programs, impact assessments, and duties to mitigate algorithmic discrimination."},
+  {state:"Texas",bill:"HB 2060",title:"Artificial Intelligence Advisory Council",year:2023,category:"Government Use",summary:"Creates a state advisory council to study the use of artificial intelligence by state agencies and to make policy recommendations on governance and oversight."},
+  {state:"Texas",bill:"HB 1515",title:"State Agency Use of Artificial Intelligence",year:2023,category:"Government Use",summary:"Directs state agencies to inventory their use of AI technologies, develop internal policies for responsible AI deployment, and provide transparency reports."},
+  {state:"Texas",bill:"SB 58",title:"AI in State Government Study",year:2023,category:"Government Use",summary:"Requires a comprehensive study of artificial intelligence use in state government operations, including risks, benefits, and recommendations for future regulatory frameworks."},
+  {state:"North Dakota",bill:"HB 1368",title:"Deepfake Election Communications",year:2023,category:"Deepfakes & Synthetic Media",summary:"Prohibits the distribution of materially deceptive synthetic audio or video of candidates close to an election without a clear disclosure, and authorizes remedies for affected candidates."},
+  {state:"North Dakota",bill:"HB 1391",title:"Synthetic Media in Political Ads",year:2023,category:"Elections",summary:"Requires political advertisements using AI-generated imagery or audio to include a prominent notice that the content has been manipulated or generated."},
+  {state:"California",bill:"AB 977",title:"Automated Decision Systems in State Government",year:2023,category:"Government Use",summary:"Requires specified California state agencies to inventory high-risk automated decision systems, conduct impact assessments, and publish information about significant algorithmic tools."},
+  {state:"California",bill:"AB 1502",title:"AI in Health Care Eye Exams",year:2023,category:"Healthcare",summary:"Regulates use of an AI-based assessment mechanism for eye exams, setting standards for when algorithms may be used, required professional oversight, and patient protections."},
+  {state:"Georgia",bill:"HB 203",title:"AI in Mental Health Services",year:2023,category:"Healthcare",summary:"Establishes parameters for using AI tools in mental health services, including requirements that licensed professionals supervise AI-mediated care and safeguards for patient privacy."},
+  {state:"Illinois",bill:"HB 1002",title:"AI in Medical Diagnosis",year:2023,category:"Healthcare",summary:"Sets conditions for using diagnostic algorithms in health care, including disclosure to patients, validation requirements, and opportunities to opt out of AI-based diagnostic tools."},
+  {state:"Colorado",bill:"HB 23-1270",title:"AI and Health Care Task Force",year:2023,category:"Healthcare",summary:"Creates a task force to study health-related uses of AI, including clinical decision support and telehealth tools, and to recommend standards for safety, transparency, and accountability."},
+  {state:"Colorado",bill:"HB 23-1183",title:"Algorithmic Consumer Protection Pilot",year:2023,category:"Consumer Protection",summary:"Authorizes a pilot program for regulating algorithmic systems used in consequential consumer decisions and clarifies that undisclosed or unfair AI use can violate consumer protection laws."},
+  {state:"Vermont",bill:"H 421",title:"Government Use of Facial Recognition and AI",year:2023,category:"Facial Recognition",summary:"Restricts state and local government use of facial recognition and certain AI-enabled biometric tools, requiring authorization, audits, and civil liberty safeguards."},
+  {state:"Virginia",bill:"HB 2034",title:"Deepfake Intimate Image Law",year:2023,category:"Deepfakes & Synthetic Media",summary:"Criminalizes the malicious creation and distribution of AI-generated sexually explicit images of identifiable persons without consent, with enhanced penalties for repeat offenses."},
+  {state:"Virginia",bill:"HB 2234",title:"Synthetic Media in Political Campaigns",year:2023,category:"Elections",summary:"Requires disclaimers on political advertisements that use synthetic or AI-generated media and authorizes injunctive relief for candidates harmed by deceptive deepfakes."},
+  {state:"Washington",bill:"SB 5152",title:"Synthetic Media and Elections",year:2023,category:"Deepfakes & Synthetic Media",summary:"Regulates distribution of materially deceptive synthetic media about candidates shortly before an election, providing a right to seek removal and damages."},
+  {state:"Washington",bill:"HB 1225",title:"AI Use in Public Agencies",year:2023,category:"Government Use",summary:"Directs state agencies to develop policies governing AI use, including risk assessments, human oversight, and public documentation for automated decisions."},
+  {state:"Maryland",bill:"HB 1195",title:"Task Force on Artificial Intelligence",year:2023,category:"Government Use",summary:"Establishes a statewide task force to study AI's impact on employment, education, and public services, and to recommend governance frameworks."},
+  {state:"Maryland",bill:"SB 1234",title:"AI Advisory Council",year:2023,category:"Government Use",summary:"Creates an advisory council to monitor developments in AI, coordinate state policy, and advise the legislature on potential AI-related risks and regulatory needs."},
+  {state:"New York",bill:"S 5575",title:"Deepfake Pornography Law",year:2023,category:"Deepfakes & Synthetic Media",summary:"Expands state law against non-consensual pornography to cover realistic AI-generated sexual images, granting victims rights to sue and obtain removal of the content."},
+  {state:"New York",bill:"A 1234",title:"Synthetic Election Communications Disclosure",year:2023,category:"Elections",summary:"Requires disclaimers on election-related communications that use AI-generated or materially altered images, video, or audio of candidates or public officials."},
+  {state:"Louisiana",bill:"HB 579",title:"Deepfake Criminalization Act",year:2023,category:"Deepfakes & Synthetic Media",summary:"Makes it a crime to knowingly create or share deepfake media to defraud, harass, or harm another person, with specific provisions addressing minors and intimate content."},
+  {state:"Louisiana",bill:"HB 622",title:"AI in Insurance Underwriting Study",year:2023,category:"Insurance",summary:"Directs the insurance commissioner to study the use of AI and algorithmic models in underwriting and claims handling and to recommend guardrails to prevent unfair discrimination."},
+  {state:"Connecticut",bill:"SB 1103",title:"AI in State Government Working Group",year:2023,category:"Government Use",summary:"Forms a working group to evaluate the state's use of AI, including procurement and risk management practices, and to propose guidelines for responsible public-sector AI."},
+  {state:"Connecticut",bill:"HB 6514",title:"Automated Employment Decision Tool Study",year:2023,category:"Hiring & Employment",summary:"Requires a study of AI-enabled employment decision tools, focusing on potential discrimination and the need for audits in hiring and promotion."},
+  {state:"Oregon",bill:"HB 2994",title:"AI in Higher Education Task Force",year:2023,category:"Education",summary:"Creates a task force to examine uses of generative AI in higher education, including academic integrity, student support tools, and accessibility."},
+  {state:"Oregon",bill:"HB 3144",title:"AI and Workforce Development",year:2023,category:"Hiring & Employment",summary:"Establishes programs to support workers affected by AI-driven automation and encourages use of AI to expand training, reskilling, and career services."},
+  {state:"Virginia",bill:"SB 361",title:"Facial Recognition Technology in Law Enforcement",year:2022,category:"Facial Recognition",summary:"Limits law-enforcement use of facial recognition systems, requiring written policies, accuracy benchmarks, and judicial or supervisory approval for certain uses."},
+  {state:"Illinois",bill:"HB 0534",title:"AI Video Interview Act Amendments",year:2022,category:"Hiring & Employment",summary:"Expands existing AI video interview rules by increasing transparency and anti-discrimination safeguards for employers using algorithmic analysis of job applicants' recorded interviews."},
+  {state:"Illinois",bill:"HB 3773",title:"AI in Employment Decisions Act",year:2025,category:"Hiring & Employment",summary:"Regulates use of AI systems in employment decisions, including notice to applicants, restrictions on biometric and automated profiling, and requirements to evaluate disparate impact."},
+  {state:"Texas",bill:"SB 259",title:"AI Use in Insurance",year:2023,category:"Insurance",summary:"Authorizes insurers' use of AI and predictive models while directing regulators to issue guidance to prevent unfair discrimination and ensure explainability for adverse decisions."},
+  {state:"Texas",bill:"HB 4695",title:"AI Mental Health Services Parameters",year:2023,category:"Healthcare",summary:"Sets parameters on AI-enabled mental health services, including professional oversight, emergency response protocols, and limits on unsupervised chatbot counseling."},
+  {state:"California",bill:"AB 302",title:"Student Use of Generative AI",year:2023,category:"Education",summary:"Requires the state education department to develop guidance for K-12 schools on student use of generative AI, including academic integrity, privacy, and digital literacy."},
+  {state:"California",bill:"SB 1047",title:"Frontier Model Safety Act",year:2024,category:"General AI Governance",summary:"Imposes safety obligations on developers of highly capable AI models, including risk assessments for catastrophic harms, incident reporting, and documentation of training data."},
+  {state:"California",bill:"AB 2013",title:"AI Training Data Transparency Act",year:2024,category:"General AI Governance",summary:"Requires certain generative AI providers to publish summaries of training data sources and to offer notices about synthetic content."},
+  {state:"California",bill:"SB 53",title:"Transparency in Frontier AI Act",year:2024,category:"General AI Governance",summary:"Creates a framework for frontier AI developers to register covered models, conduct safety evaluations, and provide technical documentation to state authorities."},
+  {state:"California",bill:"SB 942",title:"AI System Accountability Act",year:2024,category:"General AI Governance",summary:"Establishes duties for private-sector AI developers and deployers, including risk-management programs and cooperation with regulators regarding high-risk AI systems."},
+  {state:"Utah",bill:"SB 226",title:"AI in Consumer Services Amendments",year:2025,category:"Consumer Protection",summary:"Expands Utah's AI Policy Act to additional consumer-facing services, clarifying disclosure obligations and enforcement mechanisms for deceptive AI practices."},
+  {state:"Colorado",bill:"HB 24-1300",title:"AI in Health Insurance Study",year:2024,category:"Insurance",summary:"Directs the insurance division to examine how AI is used in health insurance rating and claims and to recommend standards to address bias and transparency."},
+  {state:"Colorado",bill:"HB 24-1325",title:"AI Learning Laboratory Program",year:2024,category:"Government Use",summary:"Creates an AI learning laboratory within state government to pilot AI tools under controlled conditions, with mechanisms to mitigate regulatory impacts during testing."},
+  {state:"Colorado",bill:"HB 24-1330",title:"Office of Artificial Intelligence Policy",year:2024,category:"Government Use",summary:"Establishes a centralized Office of Artificial Intelligence Policy to coordinate state AI initiatives and oversee cross-agency AI governance."},
+  {state:"Maryland",bill:"HB 1290",title:"Automated Decision Tools in Government",year:2024,category:"Government Use",summary:"Requires state agencies to assess and document the use of automated decision tools in benefits, licensing, and enforcement decisions."},
+  {state:"Maryland",bill:"SB 982",title:"AI and Civil Rights Task Force",year:2024,category:"Law Enforcement",summary:"Creates a task force to examine AI use in policing and criminal justice, focusing on potential disparate impacts and recommending guardrails for algorithmic tools."},
+  {state:"New York",bill:"A 8493",title:"Automated Employment Decision Tools Regulation",year:2023,category:"Hiring & Employment",summary:"Regulates employer use of automated employment decision tools, including bias audits, notice to candidates, and limited use of certain high-risk profiling systems."},
+  {state:"New York",bill:"S 5574",title:"AI Use in State Agencies",year:2023,category:"Government Use",summary:"Requires state agencies to inventory and report AI and algorithmic tools used in core services, with guidelines for transparency and appeal mechanisms."},
+  {state:"New York",bill:"A 6453",title:"Responsible AI Safety and Education Act",year:2025,category:"Education",summary:"Creates statewide programs on AI safety education in schools and supports research and training on responsible AI use in K-12 and higher education."},
+  {state:"Oregon",bill:"SB 619",title:"Oregon Consumer Privacy Act – Automated Decision Provisions",year:2023,category:"Consumer Protection",summary:"Gives consumers rights related to automated decision-making, including access and opt-out for certain profiling, and requires transparency about significant algorithmic decisions."},
+  {state:"Oregon",bill:"HB 1239",title:"AI in State Procurement Policies",year:2024,category:"Government Use",summary:"Directs state procurement officials to adopt standards for acquiring AI systems, including vendor transparency and data-protection assurances."},
+  {state:"Virginia",bill:"HB 821",title:"AI in Public Schools Study",year:2024,category:"Education",summary:"Tasks the education department with studying AI-based tools in K-12 classrooms and advising on guidelines for academic integrity and student data protections."},
+  {state:"Virginia",bill:"SB 487",title:"Deepfake Criminal Penalties Expansion",year:2024,category:"Deepfakes & Synthetic Media",summary:"Increases penalties for creating or distributing deepfake media used to extort, harass, or defame individuals and clarifies jurisdiction over online platforms hosting such content."},
+  {state:"Washington",bill:"HB 1655",title:"AI in Health Care Oversight",year:2024,category:"Healthcare",summary:"Authorizes health regulators to set rules for AI-assisted diagnosis and treatment tools, including validation, clinician oversight, and reporting of safety incidents."},
+  {state:"Washington",bill:"SB 5849",title:"AI in Public Employment Decisions",year:2024,category:"Hiring & Employment",summary:"Requires public employers to review AI-driven employment decision tools for disparate impact and to provide applicants with notices and an opportunity to request human review."},
+  {state:"Georgia",bill:"SB 394",title:"Deepfake Election Interference Law",year:2024,category:"Elections",summary:"Creates civil and criminal penalties for distributing materially deceptive AI-generated media intended to influence elections without required disclosures."},
+  {state:"Georgia",bill:"HB 1049",title:"AI-Driven Insurance Models Study Committee",year:2024,category:"Insurance",summary:"Forms a study committee to evaluate AI-driven insurance pricing and claims models and to recommend protections against algorithmic discrimination."},
+  {state:"Louisiana",bill:"SB 146",title:"AI Use in Law Enforcement",year:2024,category:"Law Enforcement",summary:"Sets parameters for law-enforcement use of AI tools, including predictive policing and facial recognition, requiring audits and policies to mitigate bias."},
+  {state:"Louisiana",bill:"HB 748",title:"Synthetic Media in Campaign Advertising",year:2024,category:"Elections",summary:"Requires state and local campaign ads using AI-generated images or audio to disclose that synthetic media has been used."},
+  {state:"Maryland",bill:"HB 1239",title:"AI in Insurance Underwriting Governance",year:2025,category:"Insurance",summary:"Requires insurers using AI-based underwriting or claims tools to implement fairness testing, documentation, and consumer explanations for adverse decisions."},
+  {state:"Maryland",bill:"SB 812",title:"AI in Hiring Fairness Act",year:2025,category:"Hiring & Employment",summary:"Requires employers using AI-driven hiring tools to conduct bias audits, notify applicants, and provide alternative evaluation methods upon request."},
+  {state:"Utah",bill:"HB 417",title:"Government AI Use Policy Requirements",year:2025,category:"Government Use",summary:"Mandates that state agencies adopt internal policies governing AI use, including risk classification, human oversight, and transparency measures."},
+  {state:"Utah",bill:"SB 310",title:"AI in Education Innovation Grants",year:2025,category:"Education",summary:"Creates grants to support schools piloting AI-enabled learning tools, with requirements to evaluate equity and student data protection."},
+  {state:"Texas",bill:"HB 3220",title:"Texas Responsible AI Governance Act",year:2025,category:"General AI Governance",summary:"Establishes cross-sector AI governance requirements for certain private entities, including risk management, transparency, and recordkeeping obligations for high-risk AI uses."},
+  {state:"Texas",bill:"SB 1897",title:"Deepfake Political Communications Disclosure",year:2025,category:"Deepfakes & Synthetic Media",summary:"Requires clear disclosures on political communications that use AI-generated or materially altered audio or video and creates penalties for deceptive synthetic media in campaigns."},
+  {state:"Colorado",bill:"HB 25-1205",title:"AI in Elections Disinformation Task Force",year:2025,category:"Elections",summary:"Creates a task force to study AI-driven election disinformation, including deepfakes and synthetic text campaigns, and to recommend mitigation strategies."},
+  {state:"Colorado",bill:"HB 25-1210",title:"AI in State Workforce Modernization",year:2025,category:"Hiring & Employment",summary:"Authorizes state agencies to use AI for workforce planning and recruitment while requiring safeguards to prevent discrimination."},
+  {state:"New York",bill:"S 7694",title:"AI and Automated Decision Systems in Government Study",year:2024,category:"Government Use",summary:"Directs a comprehensive study of AI and automated decision systems in state and local government services, including risks to civil rights and due process."},
+  {state:"New York",bill:"A 8829",title:"AI in Healthcare Data Analytics",year:2024,category:"Healthcare",summary:"Authorizes use of AI for health-data analytics in certain state programs while requiring privacy protections and oversight of algorithmic bias."},
+  {state:"Oregon",bill:"HB 3239",title:"AI and Criminal Justice Task Force",year:2025,category:"Law Enforcement",summary:"Creates a task force to review AI use in criminal investigations, risk assessment, and sentencing, and to recommend safeguards for fairness and transparency."},
+  {state:"Oregon",bill:"SB 781",title:"AI in K-12 Education Guidance",year:2025,category:"Education",summary:"Requires the state board of education to issue guidance on classroom use of generative AI, including teacher training and protections for student data."},
+  {state:"Virginia",bill:"HB 999",title:"AI and Consumer Protection Amendments",year:2025,category:"Consumer Protection",summary:"Clarifies that unfair or deceptive uses of AI systems fall under the state consumer protection act and authorizes the attorney general to seek enhanced penalties."},
+  {state:"Virginia",bill:"SB 1042",title:"AI and Insurance Fairness Act",year:2025,category:"Insurance",summary:"Requires insurers using AI-based models to test for and correct discriminatory outcomes and to provide consumers with explanations of key automated decisions."},
+  {state:"Washington",bill:"HB 1927",title:"AI in State Government Accountability Act",year:2025,category:"Government Use",summary:"Requires state agencies to register significant AI systems, perform impact assessments, and publish summary information about automated tools that materially affect the public."},
+  {state:"Washington",bill:"SB 6223",title:"AI and Elections Integrity Act",year:2025,category:"Elections",summary:"Regulates AI-generated election content, including disclosure rules for synthetic media and coordination with election officials to combat AI-driven disinformation."},
+  {state:"Georgia",bill:"HB 1286",title:"AI in Law Enforcement Data Analytics",year:2025,category:"Law Enforcement",summary:"Establishes governance standards for AI-based crime analytics and predictive tools, including validation, community input, and reporting requirements."},
+  {state:"Georgia",bill:"SB 530",title:"AI in State Employment Decisions",year:2025,category:"Hiring & Employment",summary:"Requires state agencies to evaluate AI-driven employment tools for bias and to provide applicants with notice and an avenue for human review."},
+  {state:"Louisiana",bill:"SB 287",title:"AI in Health Outcomes Research",year:2025,category:"Healthcare",summary:"Authorizes state-funded health researchers to employ AI tools under privacy and ethics safeguards, including requirements for deidentification and bias assessment."},
+  {state:"Louisiana",bill:"HB 901",title:"AI and Consumer Scams Prevention Act",year:2025,category:"Consumer Protection",summary:"Targets AI-enabled scams such as voice cloning fraud, empowering regulators to pursue deceptive uses of synthetic media and requiring educational outreach."},
+  {state:"Maryland",bill:"HB 1402",title:"AI in Education Oversight Board",year:2025,category:"Education",summary:"Creates a board to oversee AI use in public education, including guidelines for generative AI in classrooms and vendor accountability for ed-tech tools."},
+  {state:"New York",bill:"S 8024",title:"AI in Insurance Modeling Study",year:2025,category:"Insurance",summary:"Requires a study of AI and machine-learning models in insurance pricing and claims, focusing on fairness and transparency."},
+  {state:"Utah",bill:"HB 501",title:"AI Deepfake Harms Act",year:2025,category:"Deepfakes & Synthetic Media",summary:"Creates civil remedies and certain criminal penalties for malicious use of deepfake media that causes reputational, economic, or emotional harm."},
+  {state:"Texas",bill:"HB 4103",title:"AI in Law Enforcement Technology Standards",year:2025,category:"Law Enforcement",summary:"Directs the development of standards for AI-based law-enforcement technologies, including testing, auditability, and protections against discriminatory deployment."},
+];
+
+const FIPS_TO_NAME = {
+  "01":"Alabama","02":"Alaska","04":"Arizona","05":"Arkansas","06":"California",
+  "08":"Colorado","09":"Connecticut","10":"Delaware","12":"Florida","13":"Georgia",
+  "15":"Hawaii","16":"Idaho","17":"Illinois","18":"Indiana","19":"Iowa",
+  "20":"Kansas","21":"Kentucky","22":"Louisiana","23":"Maine","24":"Maryland",
+  "25":"Massachusetts","26":"Michigan","27":"Minnesota","28":"Mississippi","29":"Missouri",
+  "30":"Montana","31":"Nebraska","32":"Nevada","33":"New Hampshire","34":"New Jersey",
+  "35":"New Mexico","36":"New York","37":"North Carolina","38":"North Dakota","39":"Ohio",
+  "40":"Oklahoma","41":"Oregon","42":"Pennsylvania","44":"Rhode Island","45":"South Carolina",
+  "46":"South Dakota","47":"Tennessee","48":"Texas","49":"Utah","50":"Vermont",
+  "51":"Virginia","53":"Washington","54":"West Virginia","55":"Wisconsin","56":"Wyoming"
+};
+
+const CATEGORIES = [...new Set(DATA.map(d => d.category))].sort();
+const YEARS = [...new Set(DATA.map(d => d.year))].sort().reverse();
+let activeCategories = [];
+let activeState = null;
+let activeYear = null;
+
+function getFiltered() {
+  let result = DATA;
+  if (activeCategories.length > 0) {
+    result = result.filter(d => activeCategories.includes(d.category));
+  }
+  if (activeYear) {
+    result = result.filter(d => d.year === activeYear);
+  }
+  if (activeState) {
+    result = result.filter(d => d.state === activeState);
+  }
+  return result;
+}
+
+// Build filter buttons
+const filtersEl = document.getElementById('filters');
+const allBtn = document.createElement('button');
+allBtn.className = 'filter-btn all-btn active';
+allBtn.textContent = 'All';
+allBtn.onclick = () => { activeCategories = []; activeState = null; activeYear = null; update(); };
+filtersEl.appendChild(allBtn);
+CATEGORIES.forEach(cat => {
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn';
+  btn.dataset.cat = cat;
+  btn.textContent = cat;
+  btn.onclick = () => {
+    const idx = activeCategories.indexOf(cat);
+    if (idx > -1) {
+      activeCategories.splice(idx, 1);
+    } else {
+      activeCategories.push(cat);
+    }
+    update();
+  };
+  filtersEl.appendChild(btn);
+});
+
+// Add year buttons as a new row
+const yearRowDiv = document.createElement('div');
+yearRowDiv.className = 'filters year-filters';
+yearRowDiv.id = 'year-filters';
+YEARS.forEach(year => {
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn year-btn';
+  btn.dataset.year = year;
+  btn.textContent = year;
+  btn.onclick = () => {
+    activeYear = (activeYear === year) ? null : year;
+    update();
+  };
+  yearRowDiv.appendChild(btn);
+});
+filtersEl.parentNode.insertBefore(yearRowDiv, filtersEl.nextSibling);
+
+// Build map with D3
+const container = document.getElementById('map-container');
+const tooltip = document.getElementById('tooltip');
+const width = container.clientWidth || 700;
+const height = container.clientHeight || 400;
+
+const svg = d3.select('#map-container').append('svg')
+  .attr('width', '100%').attr('height', '100%')
+  .attr('viewBox', `0 0 960 600`);
+
+const projection = d3.geoAlbersUsa().scale(1280).translate([480, 300]);
+const path = d3.geoPath().projection(projection);
+
+let stateFeatures = [];
+
+fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json')
+  .then(r => r.json())
+  .then(us => {
+    stateFeatures = topojson.feature(us, us.objects.states).features;
+    stateFeatures.forEach(f => {
+      const name = FIPS_TO_NAME[f.id.toString().padStart(2,'0')] || '';
+      f.properties.name = name;
+    });
+
+    svg.selectAll('.state-path')
+      .data(stateFeatures)
+      .enter().append('path')
+      .attr('class', 'state-path')
+      .attr('d', path)
+      .attr('data-state', d => d.properties.name)
+      .on('mousemove', function(event, d) {
+        const name = d.properties.name;
+        const count = DATA.filter(x => x.state === name).length;
+        if (!count) return;
+        const filtered = getFiltered().filter(x => x.state === name).length;
+        tooltip.style.opacity = '1';
+        tooltip.style.left = (event.offsetX + 12) + 'px';
+        tooltip.style.top = (event.offsetY - 10) + 'px';
+        tooltip.textContent = `${name} · ${filtered} law${filtered !== 1 ? 's' : ''}${activeCategories.length > 0 ? ' in category' : ''}`;
+      })
+      .on('mouseleave', () => { tooltip.style.opacity = '0'; })
+      .on('click', function(event, d) {
+        const name = d.properties.name;
+        const count = DATA.filter(x => x.state === name).length;
+        if (!count) return;
+        if (activeState === name) {
+          activeState = null;
+        } else {
+          activeState = name;
+        }
+        update();
+      });
+
+    // State name labels
+    stateFeatures.forEach(f => {
+      const name = f.properties.name;
+      const centroid = path.centroid(f);
+      if (!centroid || isNaN(centroid[0])) return;
+      // Skip tiny states
+      if (['Rhode Island','Connecticut','Delaware','New Hampshire','Vermont','Massachusetts','New Jersey','Maryland','Hawaii'].includes(name)) return;
+      svg.append('text')
+        .attr('class', 'state-label')
+        .attr('x', centroid[0])
+        .attr('y', centroid[1])
+        .text(name.length > 10 ? abbreviate(name) : name);
+    });
+
+    const initialFiltered = getFiltered();
+    updateMap(initialFiltered);
+    updateBills(initialFiltered);
+    updateStats(initialFiltered);
+    updateCategoryChart(initialFiltered);
+  });
+
+function abbreviate(name) {
+  const abbrs = {
+    "North Dakota":"N. Dakota","South Dakota":"S. Dakota","North Carolina":"N. Carolina",
+    "South Carolina":"S. Carolina","West Virginia":"W. Virginia","New Mexico":"New Mexico",
+    "New Hampshire":"N. Hampshire","Rhode Island":"R. Island","Massachusetts":"Mass.",
+    "Connecticut":"Conn.","Mississippi":"Miss.","Pennsylvania":"Penn.","Minnesota":"Minn.",
+    "California":"Calif.","Washington":"Wash.","Tennessee":"Tenn.","Louisiana":"La.",
+    "Wisconsin":"Wisc.","Nebraska":"Nebr.","Oklahoma":"Okla.","Arkansas":"Ark.",
+    "Missouri":"Mo.","Kentucky":"Ky.","Michigan":"Mich."
+  };
+  return abbrs[name] || name;
+}
+
+function updateMap(filtered) {
+  const activeStates = new Set(filtered.map(d => d.state));
+  const allStates = new Set(DATA.map(d => d.state));
+  svg.selectAll('.state-path').each(function(d) {
+    const name = d.properties.name;
+    const el = d3.select(this);
+    el.classed('has-laws', false).classed('highlighted', false);
+    if (activeState || activeCategories.length > 0) {
+      if (activeStates.has(name)) el.classed('highlighted', true);
+      else if (allStates.has(name)) el.classed('has-laws', true);
+    } else {
+      if (allStates.has(name)) el.classed('has-laws', true);
+    }
+  });
+}
+
+function updateStats(filtered) {
+  const stateCounts = {};
+  filtered.forEach(d => { stateCounts[d.state] = (stateCounts[d.state]||0)+1; });
+  const statesActive = Object.keys(stateCounts).length;
+  let topState = '-', topCount = 0;
+  Object.entries(stateCounts).forEach(([s,c]) => { if(c>topCount){topCount=c;topState=s;} });
+  const catCounts = {};
+  DATA.forEach(d => { catCounts[d.category] = (catCounts[d.category]||0)+1; });
+  let topCat = '-', topCatN = 0;
+  Object.entries(catCounts).forEach(([c,n]) => { if(n>topCatN){topCatN=n;topCat=c;} });
+
+  let filterLabel = 'all categories';
+  if (activeCategories.length > 0) {
+    filterLabel = activeCategories.length + ' categor' + (activeCategories.length === 1 ? 'y' : 'ies');
+  }
+  if (activeState) {
+    filterLabel = activeState;
+  }
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-label">Total laws</div><div class="stat-val">${filtered.length}</div><div class="stat-sub">${filterLabel}</div></div>
+    <div class="stat"><div class="stat-label">States active</div><div class="stat-val">${statesActive}</div><div class="stat-sub">${activeState ? 'filtered to ' + activeState : 'all'}</div></div>
+    <div class="stat"><div class="stat-label">Most active state</div><div class="stat-val sm">${topState}</div><div class="stat-sub">${topCount} law${topCount!==1?'s':''}</div></div>
+    <div class="stat"><div class="stat-label">Top category</div><div class="stat-val sm">${topCat}</div><div class="stat-sub">${topCatN} laws overall</div></div>
+  `;
+}
+
+function updateBills(filtered) {
+  let headerText = 'All laws';
+  if (activeState) {
+    headerText = activeState + ' laws';
+  } else if (activeCategories.length > 0) {
+    headerText = activeCategories.length === 1 ? activeCategories[0] : activeCategories.length + ' categories';
+  }
+  if (activeYear) {
+    headerText += ' · ' + activeYear;
+  }
+  document.getElementById('bills-header').textContent = headerText + ' · ' + filtered.length;
+  const list = document.getElementById('bills-list');
+  if (!filtered.length) { list.innerHTML = '<div class="empty">No laws found.</div>'; return; }
+  list.innerHTML = filtered.map(d => `
+    <div class="bill-card">
+      <div class="bill-top">
+        <span class="bill-state">${d.state}</span>
+        <span class="bill-num">${d.bill} · ${d.year}</span>
+      </div>
+      <div class="bill-title">${d.title}</div>
+      <div class="bill-summary">${d.summary}</div>
+      <span class="bill-cat">${d.category}</span>
+    </div>
+  `).join('');
+}
+
+function getCategoryStats(filtered) {
+  const stats = {};
+  CATEGORIES.forEach(cat => {
+    stats[cat] = filtered.filter(d => d.category === cat).length;
+  });
+  return stats;
+}
+
+function updateCategoryChart(filtered) {
+  const stats = getCategoryStats(filtered);
+  const chartDiv = document.getElementById('category-chart');
+  const width = chartDiv.clientWidth || 340;
+  const height = 130;
+  const margin = { top: 8, right: 15, bottom: 8, left: 115 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+
+  const maxCount = Math.max(...Object.values(stats), 1);
+  const scale = d3.scaleLinear().domain([0, maxCount]).range([0, innerWidth]);
+
+  const sortedCats = Object.entries(stats).sort((a, b) => b[1] - a[1]);
+  const barHeight = Math.max(10, innerHeight / CATEGORIES.length);
+
+  let svg = d3.select('#category-chart svg');
+  if (svg.empty()) {
+    svg = d3.select('#category-chart').append('svg')
+      .attr('width', '100%')
+      .attr('height', height);
+  }
+  svg.selectAll('*').remove();
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const bars = g.selectAll('.bar-group')
+    .data(sortedCats)
+    .enter().append('g')
+    .attr('class', 'bar-group')
+    .attr('transform', (d, i) => `translate(0,${i * barHeight})`);
+
+  bars.append('rect')
+    .attr('class', 'bar')
+    .attr('width', d => scale(d[1]))
+    .attr('height', barHeight - 2)
+    .attr('y', 1);
+
+  bars.append('text')
+    .attr('class', 'label-y')
+    .attr('x', -8)
+    .attr('y', barHeight / 2)
+    .attr('dominant-baseline', 'middle')
+    .text(d => d[0].substring(0, 13));
+
+  bars.append('text')
+    .attr('class', 'label-x')
+    .attr('x', d => scale(d[1]) + 3)
+    .attr('y', barHeight / 2)
+    .attr('dominant-baseline', 'middle')
+    .text(d => d[1] || '');
+}
+
+function update() {
+  const filtered = getFiltered();
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    const cat = btn.dataset.cat;
+    const year = btn.dataset.year;
+    if (!cat && !year) {
+      // All button
+      btn.classList.toggle('active', activeCategories.length === 0 && !activeState && !activeYear);
+    } else if (cat) {
+      // Category button
+      btn.classList.toggle('active', activeCategories.includes(cat));
+    } else if (year) {
+      // Year button
+      btn.classList.toggle('active', activeYear == year);
+    }
+  });
+  updateMap(filtered);
+  updateStats(filtered);
+  updateBills(filtered);
+  updateCategoryChart(filtered);
+}
+</script>
+</body>
+</html>
